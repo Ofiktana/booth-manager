@@ -1,31 +1,53 @@
-import { auth, provider } from '../../config/firebase-config'
-import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'
+import { auth, signInWithGoogle,  
+  authUpdateProfile, 
+  registerNewUserWithEmail,
+  signInUserWithEmail
+} from '../../config/firebase-config'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+import Input from '../../components/forms/Input'
 
 export default function Auth(){
 
   const [regUser, setRegUser] = useState(false)
 
+  const navigate = useNavigate()
+
+
+
   function toggleRegUser(){
     setRegUser(prev => !prev)
   }
 
+
+  function navigateHome(user){
+    if(user){
+      const authInfo = {
+        userId: user.uid,
+        name: user.displayName,
+        profilePhoto: user.photoURL,
+        email: user.email,
+        isAuth: true
+      }
+
+      localStorage.setItem('auth-booth-manager', JSON.stringify(authInfo))
+
+      navigate('/home')
+
+    }
+  }
+
   // Google Sign-in implementation
 
-  async function signInWithGoogle(){
-    try{
-      const result = await signInWithPopup(auth, provider)
-      console.log(result)
-    }
-    catch(err){
-      console.log(err)
-    }
-
+  async function handleGoogleAuth(){
+    const user =  await signInWithGoogle()
+    navigateHome(user)
   }
 
   //Email and password sign-in implementation
 
-  async function signInWithEmailAndPassword(event){
+  async function handleEmailAndPassword(event){
     event.preventDefault()
 
     const formEl = document.getElementById('reg-form')
@@ -35,8 +57,27 @@ export default function Auth(){
     const password = formData.get('password')
 
     try{
-      const result = regUser ? (await createUserWithEmailAndPassword(auth, email, password)).user : (await signInWithEmailAndPassword(auth, email, password)).user
-      console.log(result)
+      
+      if(regUser){
+        const firstName = formData.get('firstName')
+        const lastName = formData.get('lastName')
+
+        const newUser = await registerNewUserWithEmail(email, password)
+        
+        if(auth.currentUser.displayName == null){
+          await authUpdateProfile(firstName, lastName)
+        }
+        
+        newUser.displayName = `${firstName} ${lastName}`
+
+        navigateHome(newUser)
+
+      }else{
+        let user = await signInUserWithEmail(email, password)
+        navigateHome(user)
+      }
+
+
 
     }catch(err){
       console.log(err)
@@ -48,47 +89,81 @@ export default function Auth(){
 
   }
 
+
+
   //In-line styles applied to the form below
 
   const formStyle = {
     maxWidth: '300px'
   }
 
-  const flexStyle = {
-    display: 'flex',
-    justifyContent: 'space-between'
-  }
+  // Form Input Elements declaration
+
+  const formInputFields = [
+    {
+      type: 'text',
+      name: 'firstName',
+      label: 'First Name',
+      placeholder: 'John',
+      visible: regUser
+    },
+    
+    {
+      type: 'text',
+      name: 'lastName',
+      label: 'Last Name',
+      placeholder: 'Doe',
+      visible: regUser
+    },
+        
+    {
+      type: 'text',
+      name: 'affiliation',
+      label: 'Affiliation',
+      placeholder: 'University of Nigeria',
+      visible: regUser
+    },
+    
+    {
+      type: 'email',
+      name: 'email',
+      label: 'Email',
+      placeholder: 'johndoe@example.com',
+      visible: true
+    },
+    
+    {
+      type: 'password',
+      name: 'password',
+      label: 'Password',
+      placeholder: '********',
+      visible: true
+    },
+  
+  ]
 
   return (
-    <div>
+    <div className='m-2'>
       <button type='button' className='btn btn-success' onClick={toggleRegUser}>{ regUser ? 'Login existing account' : 'Register new user'}</button>
       
-      <form id='reg-form' className='text-center m-5' style={formStyle} onSubmit={signInWithEmailAndPassword} method='post'>
+      <form id='reg-form' className='text-center m-5' style={formStyle} onSubmit={handleEmailAndPassword} method='post'>
         <legend>{ regUser ? 'Register New User' : 'Log in'}</legend>
 
-        {regUser && <div className='mb-3' style={flexStyle}>
-          <label className='form-label' htmlFor="fullName">Full Name</label>
-          <input className='' type="text" name='fullName' />
-        </div>}
 
-        <div className='mb-3' style={flexStyle}>
-          <label className='form-label' htmlFor="email">Email</label>
-          <input className='' type="email" name='email' />
-        </div>
-
-        {regUser && <div className='mb-3' style={flexStyle}>
-          <label className='form-label' htmlFor="phoneNo">Phone No.</label>
-          <input className='' type='text' name='phoneNo' />
-        </div>}
-
-        <div className="mb-3" style={flexStyle}>
-          <label htmlFor="password">Password</label>
-          <input className='' type="password" name='password' />
-        </div>
+        {
+          formInputFields.map((field) => {
+            return (
+              <Input key={field.name} inputBox={field} />
+            )
+          })
+        }
 
         <button type='submit' className="btn btn-success mb-2" >Sign {regUser ? 'up' : 'in'} with Email & Password</button>
+      
         <br />
-        <button type='button' className='btn btn-success' onClick={signInWithGoogle}>Sign {regUser ? 'up' : 'in'} with Google</button>
+
+        <button type='button' className='btn btn-success' onClick={handleGoogleAuth}>Sign {regUser ? 'up' : 'in'} with Google</button>
+
       </form>
     </div>
 
