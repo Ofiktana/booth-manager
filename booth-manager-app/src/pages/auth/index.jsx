@@ -1,7 +1,9 @@
 import { auth, signInWithGoogle,  
   authUpdateProfile, 
   registerNewUserWithEmail,
-  signInUserWithEmail
+  signInUserWithEmail,
+  addNewDataToCollection,
+  getDocsByParam
 } from '../../config/firebase-config'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -21,20 +23,29 @@ export default function Auth(){
   }
 
 
-  function navigateHome(user){
+  async function navigateHome(user){
     if(user){
+
+      {/* This function receives the user object after authentication and extracts relevant details */}
+
       const authInfo = {
         userId: user.uid,
         name: user.displayName,
-        profilePhoto: user.photoURL,
+        photoURL: user.photoURL,
         email: user.email,
-        isAuth: true
+        affiliation: user.affiliation || 'Seplat Exhibition Booth',
+        occupation: user.occupation || 'Guest'
       }
 
-      localStorage.setItem('auth-booth-manager', JSON.stringify(authInfo))
+      const retrievedUserById = await getDocsByParam('users',{field: 'userId', operator: '==', value: authInfo.userId})
+      console.log(retrievedUserById)
 
-      navigate('/home')
-
+      if (retrievedUserById.length > 0){
+        navigate('/home')
+      }else{
+        addNewDataToCollection('users', authInfo)
+        navigate('/home')
+      }
     }
   }
 
@@ -53,31 +64,29 @@ export default function Auth(){
     const formEl = document.getElementById('reg-form')
     const formData = new FormData(formEl)
 
-    const email = formData.get('email')
-    const password = formData.get('password')
+    const loginForm = {}
+    formData.forEach((value, key) => loginForm[key] = value)
 
     try{
       
       if(regUser){
-        const firstName = formData.get('firstName')
-        const lastName = formData.get('lastName')
 
-        const newUser = await registerNewUserWithEmail(email, password)
+        const newUser = await registerNewUserWithEmail(loginForm.email, loginForm.password)
         
         if(auth.currentUser.displayName == null){
-          await authUpdateProfile(firstName, lastName)
+          await authUpdateProfile(loginForm.firstName, loginForm.lastName)
         }
         
-        newUser.displayName = `${firstName} ${lastName}`
+        newUser.displayName = `${loginForm.firstName} ${loginForm.lastName}`
+        newUser.affiliation = loginForm.affiliation
+        newUser.occupation = loginForm.occupation
 
         navigateHome(newUser)
 
       }else{
-        let user = await signInUserWithEmail(email, password)
+        let user = await signInUserWithEmail(loginForm.email, loginForm.password)
         navigateHome(user)
       }
-
-
 
     }catch(err){
       console.log(err)
@@ -118,6 +127,14 @@ export default function Auth(){
         
     {
       type: 'text',
+      name: 'occupation',
+      label: 'Occupation',
+      placeholder: 'Student',
+      visible: regUser
+    },
+        
+    {
+      type: 'text',
       name: 'affiliation',
       label: 'Affiliation',
       placeholder: 'University of Nigeria',
@@ -146,10 +163,12 @@ export default function Auth(){
     <div className='m-2'>
       <button type='button' className='btn btn-success' onClick={toggleRegUser}>{ regUser ? 'Login existing account' : 'Register new user'}</button>
       
+      {/* Sign in / Registration form */}
+
       <form id='reg-form' className='text-center m-5' style={formStyle} onSubmit={handleEmailAndPassword} method='post'>
         <legend>{ regUser ? 'Register New User' : 'Log in'}</legend>
 
-
+        {/* Form input fields */}
         {
           formInputFields.map((field) => {
             return (

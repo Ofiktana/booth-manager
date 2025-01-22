@@ -7,7 +7,18 @@ import { getAuth,
   signInWithEmailAndPassword,
   signOut,
   updateProfile
-} from 'firebase/auth'
+} from 'firebase/auth';
+import { getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  serverTimestamp,
+  onSnapshot,
+  query,
+  where, 
+  doc,
+  updateDoc
+ } from 'firebase/firestore';
 
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -26,7 +37,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 /************************************************************************************/
-//SETTING UP AUTHENTICATION
+//AUTHENTICATION SETUP
 /************************************************************************************/
 
 export const auth = getAuth(app)
@@ -74,7 +85,6 @@ export async function signInUserWithEmail(email, password){
 
 export async function authSignOut(){
   await signOut(auth)
-  localStorage.removeItem('auth-booth-manager')
 }
 
 // Updating user-profile
@@ -88,3 +98,117 @@ export async function authUpdateProfile(firstName, lastName){
     console.log(error)
   }
 }
+
+/************************************************************************************/
+//DATABASE SETUP
+
+/*
+  Tables: 
+    - users
+*/
+/************************************************************************************/
+
+// GENERIC
+
+const db = getFirestore(app)
+
+export async function addNewDataToCollection(collectionName, data){
+  try {
+    const docRef = await addDoc(collection(db, collectionName),{
+      ...data,
+      createdAt: serverTimestamp()
+    })
+
+    console.log(`successfully recorded new item in ${collectionName}`)
+  } catch (error) {
+    console.log(error.message)
+  }
+}
+
+export async function getAllDocsInCollection(collectionName){
+
+  const querySnapshot = await getDocs(collection(db, collectionName));
+  const result = []
+  querySnapshot.forEach((doc) => {
+    result.push({id: doc.id, data: doc.data()})
+  })
+
+  return result
+}
+
+export async function getDocsByParam(collectionName, queryObj){
+  const { field, operator, value } = queryObj
+  const colRef = collection(db, collectionName)
+  const q  = query(colRef, where(field, operator, value))
+  const querySnapshot = await getDocs(q);
+  
+  const result = []
+  querySnapshot.forEach((doc) => {
+    result.push({id: doc.id, data: doc.data()})
+  })
+
+  return result
+}
+
+export async function subscribeToCollection(collectionName, callback){
+
+  const arr = []
+
+  onSnapshot(collection(db, collectionName),(querySnapshot) => {
+    querySnapshot.forEach((doc) => {
+      arr.push({id: doc.id, data: doc.data()})
+      callback(arr)
+    })
+  })
+}
+
+export async function subscribeToFilteredCollection(collectionName, param, value){
+  const colRef = collection(db, collectionName)
+
+  const q = query(colRef, where(param, '==', value))
+
+  // Example of the orderBy and limit methods in Firebase Store
+  // import { query, where, orderBy, limit } from 'firebase/firestore';
+  // const q = query(citiesRef, where('population', '>', 100000), orderBy('population','desc'), limit(2))
+  // NB: Firebase will throw an error requiring you to add an index to your query on the console
+
+  /*
+  Example of date filtering
+  const startOfDay = new Date()
+  startOfDay.setHours(0, 0, 0, 0) // hrs, mins, secs, milli-secs
+
+  const endOfDay = new Date()
+  endOfDay.setHours(23, 59, 59, 999)
+
+  const q = query(colRef, where('uid', '==', user.uid), 
+                          where('createdAt', '>=', startOfDay),
+                          where('createdAt', '<=', endOfDay),
+                          orderBy('createdAt', 'desc'))
+
+  */
+
+  onSnapshot(q, (querySnapshot) => {
+    querySnapshot.forEach((doc) => {
+      // Function to be defined
+      // Push data into an array and call a state setter function in react
+      // The data contained in the documents is accessible using doc.data()
+    })
+  })
+}
+
+export async function updateDataInDoc(collectionName, docId, data){
+
+  const docRef = doc(db, collectionName, docId)
+
+  await updateDoc(docRef, data)
+}
+
+
+export async function deleteDocFromCollection(collectionName, docId){
+  const docRef = doc(db, collectionName, docId)
+
+  await deleteDoc(docRef)
+}
+
+
+
